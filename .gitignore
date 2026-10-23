@@ -1,0 +1,5 @@
+.env
+data/
+config/
+tuwunel.toml.template
+element-web-config.json.template
