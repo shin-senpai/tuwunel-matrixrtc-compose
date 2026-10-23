@@ -1,0 +1,153 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+    caddy:
+        container_name: matrix-caddy
+        # caddy 2.11.4
+        image: caddy@sha256:844f60b64e4724a5aa8245e019dace0d3f199f7433ce6c57676cb30a920dbad9
+        restart: unless-stopped
+        mem_limit: 128m
+        cpus: 0.15
+        security_opt:
+            - no-new-privileges:true
+        healthcheck:
+            test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 10s
+        ports:
+            - 80:80
+            - 443:443
+        volumes:
+            - ./Caddyfile:/etc/caddy/Caddyfile:ro
+            - ./data:/data
+            - ./config:/config
+        environment:
+            - DOMAIN=${DOMAIN}
+        networks:
+            - caddy
+        logging: *default-logging
+
+    matrix-config-init:
+        container_name: matrix-config-init
+        # 3.23.5
+        image: alpine@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
+        environment:
+            - DOMAIN=${DOMAIN}
+            - REGISTRATION_TOKEN=${REGISTRATION_TOKEN}
+        volumes:
+            - ./tuwunel.toml.template:/template/tuwunel.toml.template:ro
+            - ./element-web-config.json.template:/template/element-web-config.json.template:ro
+            - tuwunel-config:/output/tuwunel
+            - element-web-config:/output/element-web
+        entrypoint: sh
+        command:
+            - -c
+            - |
+                set -e
+                apk add --no-cache gettext >/dev/null
+                envsubst < /template/tuwunel.toml.template > /output/tuwunel/tuwunel.toml
+                echo "Generated tuwunel.toml from template."
+                envsubst < /template/element-web-config.json.template > /output/element-web/config.json
+                echo "Generated config.json from template."
+        restart: "no"
+
+    matrix-server:
+        container_name: matrix-server
+        # v1.8.2-release-all-x86_64-v3-linux-gnu
+        image: ghcr.io/matrix-construct/tuwunel@sha256:573dd5f7afe102a2862e70b9e45780991de6e32ecc73c5251d2684ebcdb3c6f1
+        restart: unless-stopped
+        mem_limit: 1024m
+        cpus: 0.5
+        stop_grace_period: 30s
+        security_opt:
+            - no-new-privileges:true
+        depends_on:
+            matrix-config-init:
+                condition: service_completed_successfully
+        volumes:
+            - db:/var/lib/tuwunel
+            - tuwunel-config:/config:ro
+        environment:
+            - TUWUNEL_CONFIG=/config/tuwunel.toml
+        networks:
+            - caddy
+        logging: *default-logging
+
+    matrix-rtc-jwt:
+        container_name: matrix-rtc-jwt
+        # 0.5.0
+        image: ghcr.io/element-hq/lk-jwt-service@sha256:29918567e6b7cd920e2853b4cd6848ce01b79947c3d19a9f1ed5b74f0a2a88bf
+        restart: unless-stopped
+        mem_limit: 64m
+        cpus: 0.1
+        security_opt:
+            - no-new-privileges:true
+        environment:
+            - LIVEKIT_JWT_BIND=:8081
+            - LIVEKIT_URL=wss://matrix-rtc.${DOMAIN}
+            - LIVEKIT_KEY=${MRTC_KEY}
+            - LIVEKIT_SECRET=${MRTC_SECRET}
+            - LIVEKIT_FULL_ACCESS_HOMESERVERS=matrix.${DOMAIN}
+        networks:
+            - caddy
+        logging: *default-logging
+
+    matrix-rtc-livekit:
+        container_name: matrix-rtc-livekit
+        # 1.13.4
+        image: livekit/livekit-server@sha256:189f7c81b704a36642bc5c7e2d3e1ae83744627c11978a23a251bf19fbec64e0
+        command: --config /etc/livekit.yml
+        restart: unless-stopped
+        mem_limit: 512m
+        cpus: 0.35
+        security_opt:
+            - no-new-privileges:true
+        ports:
+            - 7881:7881/tcp
+            - 50100-50200:50100-50200/udp
+        volumes:
+            - ./livekit.yml:/etc/livekit.yml:ro
+        environment:
+            - "LIVEKIT_KEYS=${MRTC_KEY}: ${MRTC_SECRET}"
+        networks:
+            - caddy
+        logging: *default-logging
+
+    matrix-element-web:
+        container_name: matrix-element-web
+        # v1.12.24
+        image: ghcr.io/element-hq/element-web@sha256:9f9b546280e67e492d56f6e775c449e74356bffb98daaf211abc755276713fad
+        restart: unless-stopped
+        mem_limit: 128m
+        cpus: 0.1
+        security_opt:
+            - no-new-privileges:true
+        depends_on:
+            matrix-config-init:
+                condition: service_completed_successfully
+        volumes:
+            - type: volume
+              source: element-web-config
+              target: /app/config.json
+              read_only: true
+              volume:
+                subpath: config.json
+            - ./custom-images:/usr/share/nginx/html/custom-images:ro
+        networks:
+            - caddy
+        logging: *default-logging
+
+volumes:
+    db:
+    tuwunel-config:
+    element-web-config:
+
+networks:
+    caddy:
+        external: true

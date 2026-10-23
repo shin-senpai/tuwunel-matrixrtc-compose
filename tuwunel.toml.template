@@ -1,0 +1,38 @@
+[global]
+
+# Suffix for all user/room IDs on this server. Cannot be changed later
+# without a database wipe.
+server_name = "matrix.${DOMAIN}"
+
+database_path = "/var/lib/tuwunel"
+address = "0.0.0.0"
+port = 6167
+
+# Bytes, ~20 MB
+max_request_size = 20000000
+
+# Use client IP from Caddy's X-Forwarded-For header.
+ip_source = "rightmost_x_forwarded_for"
+
+# Don't use the token here, generate token using !admin token issue <MAX_USES> and give that to users
+allow_registration = true
+registration_token = "${REGISTRATION_TOKEN}"
+
+# Federation is technically on to allow livekit to work, but communication
+# with remote servers isn't allowed - refer to https://forgejo.ellis.link/continuwuation/continuwuity/issues/1440
+allow_federation = true
+forbidden_remote_server_names = [".*"]
+
+# Enable Room Encryption by default
+#encryption_enabled_by_default_for_room_type = "all"
+
+# Suffix to put on displayname's of new users
+new_user_displayname_suffix = "👋"
+
+# Uncomment to set a room that new users will automatically join
+auto_join_rooms = ["#welcome:matrix.${DOMAIN}"]
+
+[global.well_known]
+server = "matrix.${DOMAIN}:443"
+client = "https://matrix.${DOMAIN}"
+livekit_url = "https://matrix-rtc.${DOMAIN}"

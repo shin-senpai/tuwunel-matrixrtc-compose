@@ -1,0 +1,22 @@
+matrix.{$DOMAIN} {
+	reverse_proxy matrix-server:6167
+}
+
+matrix-rtc.{$DOMAIN} {
+	@jwt_service {
+		path /sfu/get* /healthz* /get_token*
+	}
+	handle @jwt_service {
+		reverse_proxy matrix-rtc-jwt:8081
+	}
+	handle {
+		reverse_proxy matrix-rtc-livekit:7880 {
+			header_up Connection "upgrade"
+			header_up Upgrade {http.request.header.Upgrade}
+		}
+	}
+}
+
+chat.{$DOMAIN} {
+        reverse_proxy matrix-element-web:80
+}

@@ -1,0 +1,10 @@
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50100
+  port_range_end: 50200
+  use_external_ip: false
+  node_ip: "188.245.196.76"   # from step 3
+  enable_loopback_candidate: false
