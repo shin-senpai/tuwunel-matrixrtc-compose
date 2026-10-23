@@ -6,5 +6,5 @@ rtc:
   port_range_start: 50100
   port_range_end: 50200
   use_external_ip: false
-  node_ip: "[IP]"   # from step 3
+  node_ip: "[IP]"  
   enable_loopback_candidate: false
